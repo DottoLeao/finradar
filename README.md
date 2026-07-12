@@ -4,7 +4,7 @@
 
 Dashboard que recebe um ou mais extratos bancários em CSV (formatos diferentes de banco pra banco), categoriza os gastos automaticamente por regras, com sugestão opcional de IA rodando 100% no navegador pro que sobra, e gera um resumo executivo determinístico a partir dos números reais do período — sem nenhuma chamada de IA em nuvem, sem custo por requisição.
 
-> 🔗 Live: _[adicionar link após deploy]_
+> 🔗 Live: [finradar-zeta.vercel.app](https://finradar-zeta.vercel.app)
 
 ---
 

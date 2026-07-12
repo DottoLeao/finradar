@@ -52,3 +52,5 @@ next-env.d.ts
 
 # scripts: dataset/embedding cache for offline model training (not app source)
 /scripts/.cache/
+
+.vercel
