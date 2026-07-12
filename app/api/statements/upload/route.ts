@@ -56,7 +56,11 @@ export async function POST(req: NextRequest) {
       if (err instanceof UnsupportedFormatError) {
         skippedFiles.push({ filename, reason: err.message });
       } else {
-        throw err;
+        // Erro inesperado de parsing (linha malformada que os parsers ainda
+        // não previram, encoding estranho etc.) — nunca derruba a
+        // requisição inteira; os outros arquivos do upload continuam.
+        console.error(`Erro inesperado ao parsear ${filename}:`, err);
+        skippedFiles.push({ filename, reason: dict.errors.unsupportedFormat });
       }
     }
   }

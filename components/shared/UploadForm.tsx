@@ -34,9 +34,6 @@ export function UploadForm({ dict, locale }: { dict: Dictionary; locale: Locale 
     setStageIndex(0);
     setLoading(true);
     setError(null);
-    // Baixa/carrega o modelo de IA local em paralelo com o processamento do
-    // servidor — a worker sobrevive à navegação client-side até o relatório.
-    import("@/lib/ai-local/client").then(({ prefetchAiEngine }) => prefetchAiEngine());
     try {
       const res = await fetch("/api/statements/upload", {
         method: "POST",
@@ -52,6 +49,12 @@ export function UploadForm({ dict, locale }: { dict: Dictionary; locale: Locale 
         setLoading(false);
         return;
       }
+
+      // Só começa a baixar/carregar o modelo de IA local DEPOIS que o upload
+      // em si terminou — em conexões fracas, baixar ~30MB em paralelo com o
+      // próprio envio do arquivo competia por banda e podia derrubar o
+      // upload. A worker sobrevive à navegação client-side até o relatório.
+      import("@/lib/ai-local/client").then(({ prefetchAiEngine }) => prefetchAiEngine());
 
       const suffix = data.duplicatesSkipped > 0 ? `?duplicates=${data.duplicatesSkipped}` : "";
       router.push(`/report/${data.reportId}${suffix}`);
