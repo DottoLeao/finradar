@@ -36,7 +36,7 @@ export function detectFormat(rows: string[][]): FormatDetectionResult {
     return { format: "wise", header: rows[0] };
   }
 
-  if (rows[0].length === 4 && DATE_DDMMYYYY.test(rows[0][0].trim())) {
+  if (rows[0].length === 4 && rows[0][0] && DATE_DDMMYYYY.test(rows[0][0].trim())) {
     return { format: "commbank" };
   }
 
