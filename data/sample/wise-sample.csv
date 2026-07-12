@@ -1,0 +1,23 @@
+"TransferWise ID",Date,"Date Time",Amount,Currency,Description,"Payment Reference","Running Balance","Exchange From","Exchange To","Exchange Rate","Payer Name","Payee Name","Payee Account Number",Merchant,"Card Last Four Digits","Card Holder Full Name",Attachment,Note,"Total Fees","Exchange To Amount","Transaction Type","Transaction Details Type"
+"TW10002345","01-06-2026","2026-06-01 09:12:03",2800.00,AUD,"Incoming transfer from employer","JUN SALARY","2800.00","","","","Estudio Andrade Ltda","","","","","","","","0.00","",CREDIT,TRANSFER
+"TW10002346","02-06-2026","2026-06-02 14:32:10",-92.40,AUD,"WOOLWORTHS SUPERMARKET SYDNEY AUS","","2707.60","","","","","","","WOOLWORTHS SUPERMARKET","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002347","02-06-2026","2026-06-02 20:05:44",-15.99,AUD,"SPOTIFY AB STOCKHOLM SWE","","2691.61","","","","","","","SPOTIFY","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002348","03-06-2026","2026-06-03 08:20:11",-350.00,BRL,"Currency conversion BRL to AUD","","2691.61","BRL","AUD","0.1912","","","","","","","","","0.50","66.92",DEBIT,CONVERSION
+"TW10002349","03-06-2026","2026-06-03 12:44:02",-11.30,AUD,"UBER TRIP SYDNEY AUS","","2758.53","","","","","","","UBER","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002350","04-06-2026","2026-06-04 19:02:55",-58.70,AUD,"LIVRARIA CULTURA ONLINE BRA","","2699.83","","","","","","","LIVRARIA CULTURA","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002351","05-06-2026","2026-06-05 10:15:30",-125.00,AUD,"Outgoing transfer PayID","RENT SHARE","2574.83","","","","","Lucas Andrade","xx-xxx-4432198","","","","","","0.00","",DEBIT,TRANSFER
+"TW10002352","06-06-2026","2026-06-06 13:08:19",-76.20,AUD,"COLES SUPERMARKET MELBOURNE AUS","","2498.63","","","","","","","COLES SUPERMARKET","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002353","07-06-2026","2026-06-07 21:40:07",-22.99,AUD,"NETFLIX.COM AUS","","2475.64","","","","","","","NETFLIX.COM","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002354","08-06-2026","2026-06-08 09:55:41",-27.80,AUD,"PADARIA BOM GOSTO SAO PAULO BRA","","2447.84","","","","","","","PADARIA BOM GOSTO","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002355","09-06-2026","2026-06-09 18:12:23",-34.50,AUD,"UBER EATS SYDNEY AUS","","2413.34","","","","","","","UBER EATS","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002356","10-06-2026","2026-06-10 11:00:00",-180.00,AUD,"Outgoing transfer PayID","BILLS SHARE","2233.34","","","","","Rafael Costa","xx-xxx-9981245","","","","","","0.00","",DEBIT,TRANSFER
+"TW10002357","11-06-2026","2026-06-11 07:44:19",-9.80,AUD,"TRANSLINK TICKETING QLD AUS","","2223.54","","","","","","","TRANSLINK TICKETING","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002358","12-06-2026","2026-06-12 20:30:52",-41.10,AUD,"MENULOG ORDER MELBOURNE AUS","","2182.44","","","","","","","MENULOG","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002359","13-06-2026","2026-06-13 15:26:04",-88.90,AUD,"WOOLWORTHS SUPERMARKET SYDNEY AUS","","2093.54","","","","","","","WOOLWORTHS SUPERMARKET","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002360","14-06-2026","2026-06-14 09:01:37",-420.00,AUD,"Currency conversion AUD to BRL","","1673.54","AUD","BRL","5.19","","","","","","","","","0.60","2179.80",DEBIT,CONVERSION
+"TW10002361","15-06-2026","2026-06-15 16:48:12",-19.40,AUD,"MERCADO DA VILA CURITIBA BRA","","1654.14","","","","","","","MERCADO DA VILA","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002362","16-06-2026","2026-06-16 10:10:10",950.00,AUD,"Incoming transfer freelance payment","INVOICE 0087","2604.14","","","","Estudio Andrade Ltda","","","","","","","","0.00","",CREDIT,TRANSFER
+"TW10002363","17-06-2026","2026-06-17 08:33:29",-15.99,AUD,"SPOTIFY AB STOCKHOLM SWE","","2588.15","","","","","","","SPOTIFY","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002364","18-06-2026","2026-06-18 12:21:03",-101.60,AUD,"COLES SUPERMARKET MELBOURNE AUS","","2486.55","","","","","","","COLES SUPERMARKET","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002365","19-06-2026","2026-06-19 17:05:48",-13.20,AUD,"UBER TRIP SYDNEY AUS","","2473.35","","","","","","","UBER","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
+"TW10002366","20-06-2026","2026-06-20 21:59:14",-22.99,AUD,"NETFLIX.COM AUS","","2450.36","","","","","","","NETFLIX.COM","4521","Marina Ferreira","","","0.00","",DEBIT,CARD
