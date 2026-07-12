@@ -44,7 +44,10 @@ function initEngine(): Promise<void> {
 
   status = "loading";
   const w = ensureWorker();
-  const device = typeof navigator !== "undefined" && "gpu" in navigator ? "webgpu" : "wasm";
+  // WASM fixo (sem WebGPU): garante a MESMA receita de embedding em toda
+  // máquina — idêntica à do treino do classificador (q8/cpu). Os lotes são
+  // pequenos demais pra GPU compensar a variação numérica entre backends.
+  const device = "wasm";
 
   readyPromise = new Promise((resolve, reject) => {
     const onMessage = (event: MessageEvent<WorkerOutMessage>) => {
@@ -61,7 +64,29 @@ function initEngine(): Promise<void> {
     w.postMessage({ type: "init", device, categoryReferences: buildCategoryReferences() });
   });
 
+  // Se a inicialização falhar (ex: rede caiu no meio do download), o retry
+  // precisa começar do zero em vez de reutilizar a promise rejeitada.
+  readyPromise.catch(() => {
+    readyPromise = null;
+    worker?.terminate();
+    worker = null;
+  });
+
   return readyPromise;
+}
+
+/**
+ * Começa a baixar/carregar o modelo sem esperar o resultado — chamado pelo
+ * UploadForm assim que o upload inicia, pra que o download corra em paralelo
+ * com o processamento do servidor. A worker (módulo-level) sobrevive à
+ * navegação client-side até o relatório, que a encontra já quente.
+ */
+export function prefetchAiEngine(): void {
+  if (!isAiCategorizationSupported()) return;
+  initEngine().catch(() => {
+    // Silencioso de propósito: se falhar aqui, o fluxo do relatório tenta de
+    // novo e mostra o erro com botão de retry.
+  });
 }
 
 export function getAiCategorizer() {

@@ -13,11 +13,11 @@ import type {
 import type { Category } from "@/lib/categorize/rules";
 
 export const EMBEDDING_MODEL_ID = "Xenova/multilingual-e5-small";
-// Calibrado empiricamente contra os CSVs de exemplo: nesse patamar os
-// "uncategorized" que realmente não cabem em nenhuma categoria (salário,
-// livraria, clínica médica) ficam abaixo do corte, e só passam os
-// plausíveis (cafés → dining, "mercado" → groceries).
-export const SUGGESTION_THRESHOLD = 0.8;
+// Calibrado empiricamente contra os CSVs de exemplo (recalibrado quando as
+// frases de referência viraram bilíngues, que subiram os scores em geral):
+// "MERCADO DA VILA" acerta groceries com 0.879, "PADARIA" com 0.844, e a
+// livraria (que não tem categoria correspondente) fica fora com 0.812.
+export const SUGGESTION_THRESHOLD = 0.83;
 
 // Calibrado contra a validação do treino (scripts/train-category-classifier.ts):
 // previsões corretas têm confiança média de ~70% (p10 ~46%), erradas ~44%
@@ -26,10 +26,29 @@ export const SUGGESTION_THRESHOLD = 0.8;
 // cosseno (abaixo), não só esse número.
 const CLASSIFIER_THRESHOLD = 0.6;
 
+// Acima deste patamar o classificador é aceito mesmo SEM concordância do
+// cosseno. Precisa ficar bem acima do erro confiante conhecido em texto fora
+// da distribuição de treino (inglês): "MERCADO DA VILA" errou com 56-69% em
+// runs anteriores. Calibrar empiricamente contra os CSVs de exemplo.
+const CLASSIFIER_SOLO_THRESHOLD = 0.85;
+
 const weights = classifierWeights as ClassifierWeights;
 
 let extractor: FeatureExtractionPipeline | null = null;
 let categoryVectors: { category: CategoryReference["category"]; vector: number[] }[] = [];
+
+/**
+ * Remove ruído bancário puro da descrição antes de embeddar ("Card xx0816",
+ * "Value Date: 03/06/2026") — dilui o embedding sem carregar significado.
+ * Cidade/país ficam (ex: "CURITIBA BRA" é sinal semântico multilíngue real).
+ */
+function cleanForEmbedding(text: string): string {
+  return text
+    .replace(/\bCard xx\d+\b/gi, "")
+    .replace(/\bValue Date: \d{2}\/\d{2}\/\d{4}\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function post(message: WorkerOutMessage) {
   self.postMessage(message);
@@ -65,22 +84,56 @@ function classify(vector: number[]): { category: Category; probability: number }
   return { category: weights.categories[topIdx], probability: probs[topIdx] };
 }
 
-function bestCosineMatch(vector: number[]): { category: Category; score: number } {
-  let bestCategory = categoryVectors[0].category;
-  let bestScore = -1;
+// Os scores do e5 são comprimidos (~0.78-0.89) e variam ~±0.002 entre
+// backends (WASM no browser vs nativo no Node) — empates no topo podem
+// inverter de ordem dependendo da máquina. Tudo dentro dessa margem é
+// tratado como empate, nunca como vencedor.
+const COSINE_TIE_MARGIN = 0.005;
+
+interface CosineMatch {
+  category: Category;
+  score: number;
+  /** Diferença pro segundo colocado — abaixo de COSINE_TIE_MARGIN é empate. */
+  lead: number;
+  scoreFor: (category: Category) => number;
+}
+
+function bestCosineMatch(vector: number[]): CosineMatch {
+  const byCategory = new Map<Category, number>();
   for (const candidate of categoryVectors) {
     const score = cosineSimilarity(vector, candidate.vector);
+    const current = byCategory.get(candidate.category);
+    if (current === undefined || score > current) byCategory.set(candidate.category, score);
+  }
+
+  let bestCategory = categoryVectors[0].category;
+  let bestScore = -1;
+  let secondScore = -1;
+  for (const [category, score] of byCategory) {
     if (score > bestScore) {
+      secondScore = bestScore;
       bestScore = score;
-      bestCategory = candidate.category;
+      bestCategory = category;
+    } else if (score > secondScore) {
+      secondScore = score;
     }
   }
-  return { category: bestCategory, score: bestScore };
+
+  return {
+    category: bestCategory,
+    score: bestScore,
+    lead: bestScore - secondScore,
+    scoreFor: (category) => byCategory.get(category) ?? -1,
+  };
 }
 
 async function init(device: AiDevice, categoryReferences: CategoryReference[]) {
+  // dtype q8: ~4x menos download com resultados idênticos nos casos de
+  // calibração. O device vem fixo em "wasm" (client.ts) pra manter UMA
+  // receita de embedding — igual à usada no treino do classificador.
   extractor = await pipeline("feature-extraction", EMBEDDING_MODEL_ID, {
     device,
+    dtype: "q8",
     progress_callback: (info) => {
       if (info.status === "progress_total") {
         post({ type: "progress", file: "model", loaded: info.loaded, total: info.total });
@@ -88,32 +141,49 @@ async function init(device: AiDevice, categoryReferences: CategoryReference[]) {
     },
   });
 
-  const vectors = await embed(categoryReferences.map((ref) => ref.referenceText));
-  categoryVectors = categoryReferences.map((ref, i) => ({ category: ref.category, vector: vectors[i] }));
+  // Cada categoria tem múltiplas frases de referência (EN + PT); embedda todas
+  // de uma vez e guarda uma entrada por frase — bestCosineMatch usa o máximo
+  // por categoria implicitamente (a melhor frase da categoria vence).
+  const flat = categoryReferences.flatMap((ref) =>
+    ref.referenceTexts.map((text) => ({ category: ref.category, text }))
+  );
+  const vectors = await embed(flat.map((entry) => entry.text));
+  categoryVectors = flat.map((entry, i) => ({ category: entry.category, vector: vectors[i] }));
 
   post({ type: "ready" });
 }
 
 async function handleEmbed(batchId: string, items: EmbedItem[]) {
   // Prefere o nome limpo do comerciante (quando existe, ex.: Wise) em vez da
-  // descrição inteira, que costuma ter ruído de cidade/cartão/data.
-  const vectors = await embed(items.map((item) => item.merchant?.trim() || item.description));
+  // descrição inteira; em ambos os casos remove ruído bancário antes.
+  const vectors = await embed(
+    items.map((item) => cleanForEmbedding(item.merchant?.trim() || item.description))
+  );
 
   const suggestions: (AiSuggestion | null)[] = items.map((item, i) => {
     const vector = vectors[i];
     const classifierPick = classify(vector);
     const cosinePick = bestCosineMatch(vector);
 
-    // O classificador treinado é bem mais preciso (~91% de validação) que o
-    // cosseno genérico, mas só viu dados em inglês — em casos como "MERCADO
-    // DA VILA CURITIBA" ele erra com confiança razoável. Exigir que os dois
-    // sinais concordem evita esse tipo de erro confiante sem precisar
-    // detectar idioma; quando não concordam, cai pro cosseno (já calibrado
-    // e validado, inclusive pra português).
-    if (classifierPick.probability >= CLASSIFIER_THRESHOLD && classifierPick.category === cosinePick.category) {
+    // Degraus, do sinal mais forte pro mais fraco:
+    // 1. Classificador muito confiante — aceita sozinho.
+    // 2. Classificador confiante E cosseno concordando — "concordar" tolera
+    //    empate no topo (a categoria do classificador só precisa estar a
+    //    COSINE_TIE_MARGIN do líder), senão inversões de 0.001 entre
+    //    backends mudam o resultado. O acordo protege contra erro confiante
+    //    em texto fora da distribuição de treino (só inglês).
+    // 3. Cosseno sozinho, mas apenas com liderança decisiva — se duas
+    //    categorias estão empatadas no topo, o cosseno sozinho não decide.
+    if (classifierPick.probability >= CLASSIFIER_SOLO_THRESHOLD) {
       return { id: item.id, category: classifierPick.category, score: classifierPick.probability };
     }
-    if (cosinePick.score >= SUGGESTION_THRESHOLD) {
+    if (
+      classifierPick.probability >= CLASSIFIER_THRESHOLD &&
+      cosinePick.scoreFor(classifierPick.category) >= cosinePick.score - COSINE_TIE_MARGIN
+    ) {
+      return { id: item.id, category: classifierPick.category, score: classifierPick.probability };
+    }
+    if (cosinePick.score >= SUGGESTION_THRESHOLD && cosinePick.lead > COSINE_TIE_MARGIN) {
       return { id: item.id, category: cosinePick.category, score: cosinePick.score };
     }
     return null;

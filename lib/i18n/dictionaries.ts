@@ -75,7 +75,6 @@ const dictionaries = {
       label: "Currency",
     },
     aiCategorize: {
-      suggestButton: "Suggest with on-device AI",
       acceptAll: "Accept all suggestions",
       disclaimer: "Runs locally in your browser — nothing is uploaded.",
       loadingModel: "Downloading local model…",
@@ -162,7 +161,6 @@ const dictionaries = {
       label: "Moeda",
     },
     aiCategorize: {
-      suggestButton: "Sugerir com IA local",
       acceptAll: "Aceitar todas as sugestões",
       disclaimer: "Roda localmente no seu navegador — nada é enviado.",
       loadingModel: "Baixando modelo local…",

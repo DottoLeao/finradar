@@ -6,7 +6,8 @@ export type AiDevice = "webgpu" | "wasm";
 
 export interface CategoryReference {
   category: Category;
-  referenceText: string;
+  /** Variações da frase de referência (EN + PT) — o cosseno usa o máximo. */
+  referenceTexts: string[];
 }
 
 export interface ClassifierWeights {

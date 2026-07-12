@@ -312,8 +312,9 @@ async function main() {
     const { train, val } = sampleAndSplit(byCategory);
     console.log(`\nAmostra: ${train.length} treino / ${val.length} validação`);
 
-    console.log(`\nCarregando modelo de embedding (${EMBEDDING_MODEL_ID})...`);
-    extractor = await pipeline("feature-extraction", EMBEDDING_MODEL_ID);
+    console.log(`\nCarregando modelo de embedding (${EMBEDDING_MODEL_ID}, q8)...`);
+    // dtype q8 — mesma receita do worker em runtime (lib/ai-local/worker.ts).
+    extractor = await pipeline("feature-extraction", EMBEDDING_MODEL_ID, { dtype: "q8" });
 
     console.log("\nEmbeddando...");
     const startTime = Date.now();
@@ -360,7 +361,7 @@ async function main() {
   }
 
   console.log("\nChecagem de generalização pro português (casos conhecidos de sessões anteriores):");
-  if (!extractor) extractor = await pipeline("feature-extraction", EMBEDDING_MODEL_ID);
+  if (!extractor) extractor = await pipeline("feature-extraction", EMBEDDING_MODEL_ID, { dtype: "q8" });
   for (const { text, expected } of PT_SANITY_SET) {
     const output = await extractor(`query: ${text}`, { pooling: "mean", normalize: true });
     const vector = output.tolist()[0] as number[];
