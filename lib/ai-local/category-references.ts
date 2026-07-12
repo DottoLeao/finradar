@@ -3,22 +3,22 @@ import type { Category } from "@/lib/categorize/rules";
 import type { CategoryReference } from "@/lib/ai-local/types";
 
 /**
- * Frase curta por categoria — dá contexto em linguagem natural pro modelo de
- * embedding, que discrimina mal uma lista nua de nomes de marca (ex.:
- * "netflix spotify uber" sozinho embeda de forma quase indistinguível entre
- * categorias). As keywords de CATEGORY_RULES continuam sendo a fonte —
- * isso só empacota o mesmo dado reaproveitado numa frase.
+ * Frases curtas por categoria, em EN e PT — dão contexto em linguagem natural
+ * pro modelo de embedding, que discrimina mal uma lista nua de nomes de marca.
+ * A variante em português melhora o fallback de cosseno pra transações em PT
+ * (o classificador treinado só viu inglês). As keywords de CATEGORY_RULES
+ * continuam sendo anexadas — mesmo dado reaproveitado, empacotado em frase.
  */
-const REFERENCE_TEMPLATES: Partial<Record<Category, string>> = {
-  groceries: "grocery shopping at a supermarket or market",
-  transport: "transportation, rides, taxis, or public transit",
-  dining: "restaurant, cafe, or food delivery order",
-  subscriptions: "recurring subscription service",
-  transfer: "bank transfer or money sent between accounts",
-  exchange: "currency exchange or conversion",
-  rent: "rent payment for housing",
-  income: "salary or payroll income",
-  healthcare: "medical clinic, hospital, or pharmacy",
+const REFERENCE_TEMPLATES: Partial<Record<Category, string[]>> = {
+  groceries: ["grocery shopping at a supermarket or market", "compras de mercado ou supermercado"],
+  transport: ["transportation, rides, taxis, or public transit", "transporte, corridas, táxi ou transporte público"],
+  dining: ["restaurant, cafe, or food delivery order", "restaurante, café, padaria ou pedido de comida"],
+  subscriptions: ["recurring subscription service", "serviço de assinatura recorrente"],
+  transfer: ["bank transfer or money sent between accounts", "transferência bancária ou envio de dinheiro"],
+  exchange: ["currency exchange or conversion", "câmbio ou conversão de moeda"],
+  rent: ["rent payment for housing", "pagamento de aluguel de moradia"],
+  income: ["salary or payroll income", "salário ou renda de folha de pagamento"],
+  healthcare: ["medical clinic, hospital, or pharmacy", "clínica médica, hospital ou farmácia"],
 };
 
 /**
@@ -28,10 +28,12 @@ const REFERENCE_TEMPLATES: Partial<Record<Category, string>> = {
 export function buildCategoryReferences(): CategoryReference[] {
   return CATEGORY_RULES.map((rule) => {
     const keywords = rule.keywords.join(", ").toLowerCase();
-    const template = REFERENCE_TEMPLATES[rule.category];
+    const templates = REFERENCE_TEMPLATES[rule.category];
     return {
       category: rule.category,
-      referenceText: template ? `${template}: ${keywords}` : keywords,
+      referenceTexts: templates
+        ? templates.map((template) => `${template}: ${keywords}`)
+        : [keywords],
     };
   });
 }
