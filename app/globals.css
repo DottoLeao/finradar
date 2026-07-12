@@ -1,0 +1,147 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body-family), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+:root {
+  --background: #f7f8f8;
+  --foreground: #14181a;
+  --card: #ffffff;
+  --card-foreground: #14181a;
+  --popover: #ffffff;
+  --popover-foreground: #14181a;
+  --primary: #12312e;
+  --primary-foreground: #f7f8f8;
+  --secondary: #5c6b66;
+  --secondary-foreground: #f7f8f8;
+  --muted: #e9edec;
+  --muted-foreground: #55605c;
+  --accent: #1f7a5c;
+  --accent-foreground: #f7f8f8;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --input: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --ring: var(--primary);
+  --radius: 0.5rem;
+
+  /* Paleta categórica (dataviz skill) — ordem fixa, nunca ciclada. */
+  --chart-1: #2a78d6; /* groceries */
+  --chart-2: #1baf7a; /* transport */
+  --chart-3: #eda100; /* subscriptions */
+  --chart-4: #008300; /* transfer */
+  --chart-5: #4a3aa7; /* dining */
+  --chart-6: #e34948; /* exchange */
+  --chart-7: #eb6834; /* other */
+  --chart-8: #e87ba4; /* uncategorized */
+  --chart-grid: #e1e0d9;
+  --chart-muted: #898781;
+}
+
+.dark {
+  --background: #0e1413;
+  --foreground: #f3f5f4;
+  --card: #151c1b;
+  --card-foreground: #f3f5f4;
+  --popover: #151c1b;
+  --popover-foreground: #f3f5f4;
+  --primary: #3fd6a3;
+  --primary-foreground: #0e1413;
+  --secondary: #2a3532;
+  --secondary-foreground: #f3f5f4;
+  --muted: #1c2523;
+  --muted-foreground: #a2ada9;
+  --accent: #3fd6a3;
+  --accent-foreground: #0e1413;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: color-mix(in srgb, var(--foreground) 14%, transparent);
+  --input: color-mix(in srgb, var(--foreground) 14%, transparent);
+  --ring: var(--primary);
+
+  --chart-1: #3987e5;
+  --chart-2: #199e70;
+  --chart-3: #c98500;
+  --chart-4: #008300;
+  --chart-5: #9085e9;
+  --chart-6: #e66767;
+  --chart-7: #d95926;
+  --chart-8: #d55181;
+  --chart-grid: #2c2c2a;
+  --chart-muted: #898781;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: #0e1413;
+    --foreground: #f3f5f4;
+    --card: #151c1b;
+    --card-foreground: #f3f5f4;
+    --popover: #151c1b;
+    --popover-foreground: #f3f5f4;
+    --primary: #3fd6a3;
+    --primary-foreground: #0e1413;
+    --secondary: #2a3532;
+    --secondary-foreground: #f3f5f4;
+    --muted: #1c2523;
+    --muted-foreground: #a2ada9;
+    --accent: #3fd6a3;
+    --accent-foreground: #0e1413;
+    --border: color-mix(in srgb, var(--foreground) 14%, transparent);
+    --input: color-mix(in srgb, var(--foreground) 14%, transparent);
+    --ring: var(--primary);
+    --chart-1: #3987e5;
+    --chart-2: #199e70;
+    --chart-3: #c98500;
+    --chart-4: #008300;
+    --chart-5: #9085e9;
+    --chart-6: #e66767;
+    --chart-7: #d95926;
+    --chart-8: #d55181;
+    --chart-grid: #2c2c2a;
+    --chart-muted: #898781;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  a,
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
+}
