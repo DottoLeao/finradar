@@ -49,10 +49,22 @@ export function UploadForm({ dict, locale }: { dict: Dictionary; locale: Locale 
           : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
       });
 
-      const data = await res.json();
+      // Erros da própria plataforma (413 payload, 504 timeout, 500) chegam
+      // como página de erro não-JSON — sem este guard, o parse estourava e
+      // caía no catch de rede, mascarando a causa real com "sem conexão".
+      let data: { error?: string; reportId?: string; duplicatesSkipped?: number } | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
 
-      if (!res.ok) {
-        setError(data.error ?? dict.upload.genericError);
+      if (!res.ok || !data) {
+        const message =
+          res.status === 413
+            ? dict.upload.fileTooLarge
+            : (data?.error ?? `${dict.upload.genericError} (HTTP ${res.status})`);
+        setError(message);
         setLoading(false);
         return;
       }
