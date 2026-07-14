@@ -37,6 +37,7 @@ const dictionaries = {
       genericError: "Unexpected error while processing the files.",
       connectionError: "Couldn't reach the server. Try again.",
       fileTooLarge: "Selected files are too large (max ~4MB total). Try uploading fewer files or smaller statements.",
+      fileReadError: "Couldn't read the selected files. Pick them again — if they live in a cloud folder, download them to the device first.",
       stages: [
         "Reading files…",
         "Detecting format…",
@@ -124,6 +125,7 @@ const dictionaries = {
       genericError: "Erro inesperado ao processar os arquivos.",
       connectionError: "Não foi possível conectar ao servidor. Tente novamente.",
       fileTooLarge: "Os arquivos selecionados são grandes demais (máx. ~4MB no total). Tente enviar menos arquivos ou extratos menores.",
+      fileReadError: "Não deu pra ler os arquivos selecionados. Selecione de novo — se estiverem numa pasta de nuvem, baixe pro aparelho antes.",
       stages: [
         "Lendo arquivos…",
         "Detectando formato…",

@@ -75,7 +75,7 @@ export function UploadForm({ dict, locale }: { dict: Dictionary; locale: Locale 
       // upload. A worker sobrevive à navegação client-side até o relatório.
       import("@/lib/ai-local/client").then(({ prefetchAiEngine }) => prefetchAiEngine());
 
-      const suffix = data.duplicatesSkipped > 0 ? `?duplicates=${data.duplicatesSkipped}` : "";
+      const suffix = (data.duplicatesSkipped ?? 0) > 0 ? `?duplicates=${data.duplicatesSkipped}` : "";
       router.push(`/report/${data.reportId}${suffix}`);
     } catch {
       setError(dict.upload.connectionError);
@@ -83,15 +83,28 @@ export function UploadForm({ dict, locale }: { dict: Dictionary; locale: Locale 
     }
   }
 
-  function handleUpload() {
+  async function handleUpload() {
     if (files.length === 0) return;
     const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
     if (totalBytes > MAX_UPLOAD_BYTES) {
       setError(dict.upload.fileTooLarge);
       return;
     }
+
+    // Lê tudo pra memória ANTES do fetch. Em Android, o seletor devolve
+    // handles content:// que podem já estar ilegíveis na hora do envio
+    // (arquivo vindo de nuvem/WhatsApp) — o fetch então falha na hora com
+    // um erro indistinguível de queda de rede. Lendo aqui, a falha vira
+    // uma mensagem acionável, e o envio nunca depende do handle do sistema.
     const formData = new FormData();
-    files.forEach((f) => formData.append("files", f));
+    try {
+      for (const file of files) {
+        formData.append("files", new File([await file.text()], file.name, { type: "text/csv" }));
+      }
+    } catch {
+      setError(dict.upload.fileReadError);
+      return;
+    }
     submitFiles(formData);
   }
 
