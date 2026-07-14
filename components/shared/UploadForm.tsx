@@ -11,6 +11,13 @@ import { getFormatters } from "@/lib/i18n/formatters";
 
 const STAGE_INTERVAL_MS = 450;
 
+// Vercel Functions hard-cap the request body at 4.5MB (413
+// FUNCTION_PAYLOAD_TOO_LARGE, returned as a non-JSON error page — res.json()
+// throws, which without this check would land in the generic
+// "couldn't reach the server" catch and hide the real problem). Staying a
+// bit under that leaves room for multipart boundaries/headers overhead.
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
 export function UploadForm({ dict, locale }: { dict: Dictionary; locale: Locale }) {
   const router = useRouter();
   const f = getFormatters(locale);
@@ -66,6 +73,11 @@ export function UploadForm({ dict, locale }: { dict: Dictionary; locale: Locale 
 
   function handleUpload() {
     if (files.length === 0) return;
+    const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
+    if (totalBytes > MAX_UPLOAD_BYTES) {
+      setError(dict.upload.fileTooLarge);
+      return;
+    }
     const formData = new FormData();
     files.forEach((f) => formData.append("files", f));
     submitFiles(formData);
