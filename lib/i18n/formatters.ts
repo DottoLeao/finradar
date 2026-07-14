@@ -33,6 +33,10 @@ const formatters = {
       suggestionCount: (count: number) =>
         count === 1 ? "1 suggestion ready" : `${count} suggestions ready`,
     },
+    toast: {
+      suggestionsApplied: (count: number) =>
+        count === 1 ? "1 suggestion applied" : `${count} suggestions applied`,
+    },
   },
   pt: {
     upload: {
@@ -65,6 +69,10 @@ const formatters = {
       downloadProgress: (percent: number) => `Baixando modelo local… ${percent}%`,
       suggestionCount: (count: number) =>
         count === 1 ? "1 sugestão pronta" : `${count} sugestões prontas`,
+    },
+    toast: {
+      suggestionsApplied: (count: number) =>
+        count === 1 ? "1 sugestão aplicada" : `${count} sugestões aplicadas`,
     },
   },
 } satisfies Record<Locale, unknown>;
