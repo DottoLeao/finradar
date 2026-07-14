@@ -22,12 +22,17 @@
  * As outras 9 categorias do dataset (Shopping, Entertainment, Utilities,
  * Insurance, Mortgage, Travel, Education, Personal Care, Fees) não têm
  * equivalente no FinRadar e são descartadas.
+ *
+ * O dataset é 100% inglês — as amostras PT-BR curadas de
+ * scripts/pt-training-samples.ts entram inteiras (sem cap) no mesmo split
+ * 85/15, pra o classificador ver PIX, iFood, drogaria etc. no treino.
  */
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import Papa from "papaparse";
 import { pipeline, type FeatureExtractionPipeline } from "@huggingface/transformers";
 import type { Category } from "@/lib/categorize/rules";
+import { PT_TRAINING_SAMPLES } from "./pt-training-samples";
 
 const CACHE_DIR = join(process.cwd(), "scripts", ".cache");
 const CSV_CACHE_PATH = join(CACHE_DIR, "transactions-synthetic.csv");
@@ -102,12 +107,12 @@ interface Split {
   val: DatasetRow[];
 }
 
-function sampleAndSplit(byCategory: Map<Category, DatasetRow[]>): Split {
+function sampleAndSplit(byCategory: Map<Category, DatasetRow[]>, cap: number): Split {
   const train: DatasetRow[] = [];
   const val: DatasetRow[] = [];
 
   for (const [, categoryRows] of byCategory) {
-    const sample = shuffle(categoryRows).slice(0, SAMPLES_PER_CATEGORY);
+    const sample = shuffle(categoryRows).slice(0, cap);
     const splitIdx = Math.floor(sample.length * 0.85);
     train.push(...sample.slice(0, splitIdx));
     val.push(...sample.slice(splitIdx));
@@ -116,17 +121,38 @@ function sampleAndSplit(byCategory: Map<Category, DatasetRow[]>): Split {
   return { train: shuffle(train), val: shuffle(val) };
 }
 
+function groupByCategory(rows: DatasetRow[]): Map<Category, DatasetRow[]> {
+  const byCategory = new Map<Category, DatasetRow[]>();
+  for (const row of rows) {
+    if (!byCategory.has(row.category)) byCategory.set(row.category, []);
+    byCategory.get(row.category)!.push(row);
+  }
+  return byCategory;
+}
+
 interface EmbeddedRow {
   category: Category;
   vector: number[];
 }
 
+// Held-out de propósito: nenhum destes comerciantes/nomes aparece em
+// scripts/pt-training-samples.ts — mede generalização, não memorização.
 const PT_SANITY_SET: { text: string; expected: Category }[] = [
   { text: "MERCADO DA VILA CURITIBA BRA", expected: "groceries" },
   { text: "PADARIA BOM GOSTO SAO PAULO BRA", expected: "dining" },
+  { text: "SUPERMERCADO PRIMAVERA MANAUS BRA", expected: "groceries" },
+  { text: "IFOOD *IFD PIZZA NAPOLI", expected: "dining" },
+  { text: "RESTAURANTE MAR E TERRA FLORIANOPOLIS", expected: "dining" },
+  { text: "PIX ENVIADO MARCOS ANDRADE", expected: "transfer" },
+  { text: "TED RECEBIDA BANCO ITAU", expected: "transfer" },
+  { text: "POSTO PETROBRAS BR 101", expected: "transport" },
+  { text: "SALARIO ACME CONSULTORIA", expected: "income" },
+  { text: "ALUGUEL REF JULHO IMOB ATLANTICO", expected: "rent" },
+  { text: "DROGARIA MODERNA CENTRO", expected: "healthcare" },
+  { text: "ACADEMIA BLUEFIT MENSALIDADE", expected: "subscriptions" },
 ];
 
-// Ordem fixa das 5 categorias que o classificador cobre — define a ordem
+// Ordem fixa das 8 categorias que o classificador cobre — define a ordem
 // das linhas da matriz de pesos exportada. "exchange" fica de fora: a regra
 // exata (CONVERSION/EXCHANGE) já resolve isso hoje, e o dataset de treino
 // não tem categoria equivalente.
@@ -286,16 +312,13 @@ const WEIGHTS_OUTPUT_PATH = join(process.cwd(), "lib", "ai-local", "classifier-w
 async function main() {
   const csvText = await downloadDataset();
   const rows = filterAndRemap(csvText);
+  const byCategory = groupByCategory(rows);
+  const ptByCategory = groupByCategory(PT_TRAINING_SAMPLES);
 
-  const byCategory = new Map<Category, DatasetRow[]>();
-  for (const row of rows) {
-    if (!byCategory.has(row.category)) byCategory.set(row.category, []);
-    byCategory.get(row.category)!.push(row);
-  }
-
-  console.log("\nLinhas por categoria após filtro/remapeamento:");
+  console.log("\nLinhas por categoria após filtro/remapeamento (EN + PT curado):");
   for (const [category, categoryRows] of byCategory) {
-    console.log(`  ${category}: ${categoryRows.length}`);
+    const ptCount = ptByCategory.get(category)?.length ?? 0;
+    console.log(`  ${category}: ${categoryRows.length} EN + ${ptCount} PT`);
   }
 
   let trainEmbedded: EmbeddedRow[];
@@ -309,8 +332,15 @@ async function main() {
     trainEmbedded = cached.train;
     valEmbedded = cached.val;
   } else {
-    const { train, val } = sampleAndSplit(byCategory);
-    console.log(`\nAmostra: ${train.length} treino / ${val.length} validação`);
+    // EN limitado por SAMPLES_PER_CATEGORY; PT curado entra inteiro (é
+    // pequeno e foi escrito à mão — descartar seria jogar sinal fora).
+    const en = sampleAndSplit(byCategory, SAMPLES_PER_CATEGORY);
+    const pt = sampleAndSplit(ptByCategory, Infinity);
+    const train = shuffle([...en.train, ...pt.train]);
+    const val = shuffle([...en.val, ...pt.val]);
+    console.log(
+      `\nAmostra: ${train.length} treino / ${val.length} validação (${pt.train.length + pt.val.length} PT)`
+    );
 
     console.log(`\nCarregando modelo de embedding (${EMBEDDING_MODEL_ID}, q8)...`);
     // dtype q8 — mesma receita do worker em runtime (lib/ai-local/worker.ts).
