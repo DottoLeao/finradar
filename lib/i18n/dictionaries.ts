@@ -36,6 +36,7 @@ const dictionaries = {
       errorTitle: "Couldn't process that",
       genericError: "Unexpected error while processing the files.",
       connectionError: "Couldn't reach the server. Try again.",
+      fileTooLarge: "Selected files are too large (max ~4MB total). Try uploading fewer files or smaller statements.",
       stages: [
         "Reading files…",
         "Detecting format…",
@@ -122,6 +123,7 @@ const dictionaries = {
       errorTitle: "Não deu pra processar",
       genericError: "Erro inesperado ao processar os arquivos.",
       connectionError: "Não foi possível conectar ao servidor. Tente novamente.",
+      fileTooLarge: "Os arquivos selecionados são grandes demais (máx. ~4MB no total). Tente enviar menos arquivos ou extratos menores.",
       stages: [
         "Lendo arquivos…",
         "Detectando formato…",
