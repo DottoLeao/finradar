@@ -30,6 +30,7 @@ export function TopTransactions({
         <CardTitle>{dict.table.topTransactions}</CardTitle>
       </CardHeader>
       <CardContent>
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -43,7 +44,7 @@ export function TopTransactions({
             {items.map((tx, i) => (
               <TableRow key={`${tx.date}-${i}`}>
                 <TableCell className="text-muted-foreground">{formatDate(tx.date, locale)}</TableCell>
-                <TableCell className="max-w-64 truncate" title={tx.description}>
+                <TableCell className="max-w-64 truncate print:max-w-none print:whitespace-normal" title={tx.description}>
                   {tx.description}
                 </TableCell>
                 <TableCell>
@@ -66,6 +67,7 @@ export function TopTransactions({
             ))}
           </TableBody>
         </Table>
+        </div>
       </CardContent>
     </Card>
   );

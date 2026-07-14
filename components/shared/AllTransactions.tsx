@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
 import { CATEGORIES, type Category } from "@/lib/categorize/rules";
 import { categoryColor } from "@/lib/chart-colors";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { getFormatters } from "@/lib/i18n/formatters";
 import type { Dictionary, Locale } from "@/lib/i18n/dictionaries";
 import { AiCategorizeSuggestions } from "@/components/shared/AiCategorizeSuggestions";
 import type { AiSuggestion } from "@/lib/ai-local/types";
@@ -49,22 +51,37 @@ export function AllTransactions({
   dict: Dictionary;
 }) {
   const router = useRouter();
+  const f = getFormatters(locale);
   const [rows, setRows] = useState(items);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, AiSuggestion>>({});
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
   const [search, setSearch] = useState("");
 
-  async function handleCategoryChange(id: string, category: unknown) {
+  // `silent` deixa o acceptAll suprimir o toast por linha e mostrar um só
+  // resumo. Retorna se deu certo, pra quem chama poder contar os sucessos.
+  async function handleCategoryChange(id: string, category: unknown, silent = false): Promise<boolean> {
     setPendingId(id);
+    const previous = rows.find((r) => r.id === id);
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, category: category as Category, categorySource: "manual" } : r)));
     try {
-      await fetch(`/api/transactions/${id}`, {
+      const res = await fetch(`/api/transactions/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category }),
       });
+      if (!res.ok) throw new Error(`PATCH failed with ${res.status}`);
+      if (!silent) toast.success(dict.toast.categoryUpdated);
       router.refresh();
+      return true;
+    } catch {
+      // Reverte o update otimista pro estado anterior — sem isso a linha
+      // ficava presa na categoria nova mesmo com o PATCH falhando.
+      if (previous) {
+        setRows((prev) => prev.map((r) => (r.id === id ? previous : r)));
+      }
+      if (!silent) toast.error(dict.toast.categoryUpdateFailed);
+      return false;
     } finally {
       setPendingId(null);
     }
@@ -94,7 +111,10 @@ export function AllTransactions({
   async function acceptAllSuggestions() {
     const entries = Object.values(aiSuggestions);
     setAiSuggestions({});
-    await Promise.all(entries.map((s) => handleCategoryChange(s.id, s.category)));
+    const results = await Promise.all(entries.map((s) => handleCategoryChange(s.id, s.category, true)));
+    const applied = results.filter(Boolean).length;
+    if (applied > 0) toast.success(f.toast.suggestionsApplied(applied));
+    if (applied < entries.length) toast.error(dict.toast.categoryUpdateFailed);
   }
 
   const uncategorizedItems = rows
@@ -115,7 +135,7 @@ export function AllTransactions({
     <Card>
       <CardHeader className="gap-3">
         <CardTitle>{dict.table.allTransactions}</CardTitle>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3 print:hidden">
           <AiCategorizeSuggestions
             items={uncategorizedItems}
             dict={dict}
@@ -128,9 +148,9 @@ export function AllTransactions({
             </Button>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
           <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as Category | "all")}>
-            <SelectTrigger size="sm" className="w-44">
+            <SelectTrigger size="sm" className="w-full sm:w-44">
               <SelectValue>{categoryFilter === "all" ? dict.table.allCategories : dict.categories[categoryFilter]}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -146,11 +166,12 @@ export function AllTransactions({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={dict.table.searchPlaceholder}
-            className="w-56"
+            className="w-full sm:w-56"
           />
         </div>
       </CardHeader>
       <CardContent>
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -171,16 +192,17 @@ export function AllTransactions({
             {filteredRows.map((tx) => (
               <TableRow key={tx.id}>
                 <TableCell className="text-muted-foreground">{formatDate(tx.date, locale)}</TableCell>
-                <TableCell className="max-w-80 truncate" title={tx.description}>
+                <TableCell className="max-w-80 truncate print:max-w-none print:whitespace-normal" title={tx.description}>
                   {tx.description}
                 </TableCell>
                 <TableCell>
+                  <span className="hidden print:inline">{dict.categories[tx.category]}</span>
                   <Select
                     value={tx.category}
                     onValueChange={(value) => handleCategoryChange(tx.id, value)}
                     disabled={pendingId === tx.id}
                   >
-                    <SelectTrigger size="sm" className="min-w-40">
+                    <SelectTrigger size="sm" className="min-w-40 print:hidden">
                       <span
                         className="size-2 shrink-0 rounded-full"
                         style={{ backgroundColor: categoryColor(tx.category) }}
@@ -205,7 +227,7 @@ export function AllTransactions({
                     </Badge>
                   ) : null}
                   {tx.category === "uncategorized" && aiSuggestions[tx.id] ? (
-                    <Badge variant="secondary" className="ml-2 gap-1 align-middle">
+                    <Badge variant="secondary" className="ml-2 gap-1 align-middle print:hidden">
                       {dict.categories[aiSuggestions[tx.id].category]}
                       <button
                         type="button"
@@ -233,6 +255,7 @@ export function AllTransactions({
             ))}
           </TableBody>
         </Table>
+        </div>
       </CardContent>
     </Card>
   );

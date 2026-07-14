@@ -8,6 +8,7 @@ import { AllTransactions, type TransactionRow } from "@/components/shared/AllTra
 import { CurrencySelector } from "@/components/shared/CurrencySelector";
 import { ExecutiveSummary } from "@/components/shared/ExecutiveSummary";
 import { DuplicateBanner } from "@/components/shared/DuplicateBanner";
+import { ExportButton } from "@/components/shared/ExportButton";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildAggregates, type CategoryTotal } from "@/lib/aggregate";
 import { groupForChart } from "@/lib/chart-colors";
@@ -88,7 +89,8 @@ export default async function ReportPage({
       <Header locale={locale} dict={dict} />
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-8">
         <DuplicateBanner count={duplicatesSkipped} locale={locale} />
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-2">
+          <ExportButton dict={dict} />
           <CurrencySelector currency={targetCurrency} label={dict.currency.label} />
         </div>
         <StatCards aggregates={aggregates} currency={targetCurrency} locale={locale} dict={dict} />
