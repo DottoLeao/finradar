@@ -145,3 +145,56 @@
     cursor: pointer;
   }
 }
+
+/* Impressão / exportar PDF (ExportButton chama window.print()): força tema
+   claro independente do dark mode, preserva as cores dos gráficos/badges e
+   evita cortar cards no meio da página. */
+@media print {
+  :root,
+  :root.dark,
+  :root:not(.light) {
+    --background: #ffffff;
+    --foreground: #14181a;
+    --card: #ffffff;
+    --card-foreground: #14181a;
+    --popover: #ffffff;
+    --popover-foreground: #14181a;
+    --primary: #12312e;
+    --primary-foreground: #f7f8f8;
+    --secondary: #5c6b66;
+    --secondary-foreground: #f7f8f8;
+    --muted: #e9edec;
+    --muted-foreground: #55605c;
+    --accent: #1f7a5c;
+    --accent-foreground: #f7f8f8;
+    --border: color-mix(in srgb, #14181a 12%, transparent);
+    --chart-1: #2a78d6;
+    --chart-2: #1baf7a;
+    --chart-3: #eda100;
+    --chart-4: #008300;
+    --chart-5: #4a3aa7;
+    --chart-6: #e34948;
+    --chart-7: #eb6834;
+    --chart-8: #e87ba4;
+    --chart-grid: #e1e0d9;
+    --chart-muted: #898781;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+
+  body {
+    background: #ffffff;
+    /* mantém as cores de fundo (fatias do gráfico, badges) na impressão */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Não corta cartões, linhas de tabela nem os gráficos entre páginas. */
+  [data-slot="card"],
+  tr,
+  .recharts-wrapper {
+    break-inside: avoid;
+  }
+}

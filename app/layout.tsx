@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Figtree } from "next/font/google";
+import { Toaster } from "sonner";
 import { getLocale } from "@/lib/i18n/locale";
 import "./globals.css";
 
@@ -34,6 +35,7 @@ export default async function RootLayout({
     <html lang={locale} className={`${fontBody.variable} h-full antialiased`}>
       <body className="relative min-h-full flex flex-col font-sans">
         {children}
+        <Toaster position="bottom-center" richColors className="print:hidden" />
       </body>
     </html>
   );

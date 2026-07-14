@@ -76,6 +76,13 @@ const dictionaries = {
     currency: {
       label: "Currency",
     },
+    report: {
+      exportPdf: "Export PDF",
+    },
+    toast: {
+      categoryUpdated: "Category updated",
+      categoryUpdateFailed: "Couldn't update the category. Try again.",
+    },
     aiCategorize: {
       acceptAll: "Accept all suggestions",
       disclaimer: "Runs locally in your browser — nothing is uploaded.",
@@ -163,6 +170,13 @@ const dictionaries = {
     },
     currency: {
       label: "Moeda",
+    },
+    report: {
+      exportPdf: "Exportar PDF",
+    },
+    toast: {
+      categoryUpdated: "Categoria atualizada",
+      categoryUpdateFailed: "Não deu pra atualizar a categoria. Tente de novo.",
     },
     aiCategorize: {
       acceptAll: "Aceitar todas as sugestões",
