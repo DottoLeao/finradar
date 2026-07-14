@@ -13,23 +13,23 @@ import type {
 import type { Category } from "@/lib/categorize/rules";
 
 export const EMBEDDING_MODEL_ID = "Xenova/multilingual-e5-small";
-// Calibrado empiricamente contra os CSVs de exemplo (recalibrado quando as
-// frases de referência viraram bilíngues, que subiram os scores em geral):
-// "MERCADO DA VILA" acerta groceries com 0.879, "PADARIA" com 0.844, e a
-// livraria (que não tem categoria correspondente) fica fora com 0.812.
+// Calibrado empiricamente contra os CSVs de exemplo (revalidado após o
+// retreino com PT-BR e as referências extras de 2026-07): "PADARIA BOM
+// GOSTO" acerta dining com 0.836, e a livraria (que não tem categoria
+// correspondente) fica fora com 0.810.
 export const SUGGESTION_THRESHOLD = 0.83;
 
-// Calibrado contra a validação do treino (scripts/train-category-classifier.ts):
-// previsões corretas têm confiança média de ~70% (p10 ~46%), erradas ~44%
-// (p90 ~61%). 0.6 fica acima da maioria dos erros mantendo boa parte dos
-// acertos — a rede de segurança de verdade é exigir concordância com o
-// cosseno (abaixo), não só esse número.
+// Calibrado contra a validação do treino (scripts/train-category-classifier.ts,
+// EN + PT-BR): previsões corretas têm confiança média de ~66% (p10 ~37%),
+// erradas ~40% (p90 ~54%). 0.6 fica acima do p90 dos erros mantendo boa
+// parte dos acertos — a rede de segurança de verdade é exigir concordância
+// com o cosseno (abaixo), não só esse número.
 const CLASSIFIER_THRESHOLD = 0.6;
 
 // Acima deste patamar o classificador é aceito mesmo SEM concordância do
-// cosseno. Precisa ficar bem acima do erro confiante conhecido em texto fora
-// da distribuição de treino (inglês): "MERCADO DA VILA" errou com 56-69% em
-// runs anteriores. Calibrar empiricamente contra os CSVs de exemplo.
+// cosseno. Bem acima do p90 dos erros da validação (~54%) — erro confiante
+// a esse nível é raro. Recalibrar contra os CSVs de exemplo a cada retreino
+// (scripts/.cache/calibrate.ts).
 const CLASSIFIER_SOLO_THRESHOLD = 0.85;
 
 const weights = classifierWeights as ClassifierWeights;
@@ -74,8 +74,9 @@ function softmax(logits: number[]): number[] {
 
 /**
  * Classificador linear treinado offline (scripts/train-category-classifier.ts)
- * sobre os mesmos embeddings — cobre só 5 categorias (sem "exchange", que a
- * regra exata já resolve) e só viu dados em inglês no treino.
+ * sobre os mesmos embeddings — cobre 8 categorias (sem "exchange", que a
+ * regra exata já resolve). Treinado com o dataset EN + amostras PT-BR
+ * curadas (scripts/pt-training-samples.ts).
  */
 function classify(vector: number[]): { category: Category; probability: number } {
   const logits = weights.weights.map((row, c) => row.reduce((acc, w, i) => acc + w * vector[i], weights.bias[c]));
@@ -171,7 +172,7 @@ async function handleEmbed(batchId: string, items: EmbedItem[]) {
     //    empate no topo (a categoria do classificador só precisa estar a
     //    COSINE_TIE_MARGIN do líder), senão inversões de 0.001 entre
     //    backends mudam o resultado. O acordo protege contra erro confiante
-    //    em texto fora da distribuição de treino (só inglês).
+    //    em texto fora da distribuição de treino (EN + PT-BR sintético).
     // 3. Cosseno sozinho, mas apenas com liderança decisiva — se duas
     //    categorias estão empatadas no topo, o cosseno sozinho não decide.
     if (classifierPick.probability >= CLASSIFIER_SOLO_THRESHOLD) {
