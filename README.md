@@ -1,84 +1,84 @@
 # FinRadar
 
-**Suba o extrato de qualquer banco, veja pra onde seu dinheiro foi — sem categorizar nada na mão.**
+**Upload any bank statement, see where your money went — without categorizing anything by hand.**
 
-Dashboard que recebe um ou mais extratos bancários em CSV (formatos diferentes de banco pra banco), categoriza os gastos automaticamente por regras, com sugestão opcional de IA rodando 100% no navegador pro que sobra, e gera um resumo executivo determinístico a partir dos números reais do período — sem nenhuma chamada de IA em nuvem, sem custo por requisição.
+A dashboard that accepts one or more bank statements in CSV format (each bank exports differently), automatically categorizes transactions using rules, with an optional AI suggestion layer running 100% in the browser for whatever's left, and generates a deterministic executive summary straight from the actual numbers in the period — no cloud AI calls, no per-request cost.
 
 > 🔗 Live: [finradar-zeta.vercel.app](https://finradar-zeta.vercel.app)
 
 ---
 
-## O problema real
+## The real problem
 
-CSV genérico de exemplo é um exercício abstrato. Extrato bancário é um problema de verdade: cada banco exporta num formato diferente, sem padronização, com colunas, ordem e ruído próprios. Um app que assume um schema fixo quebra assim que troca de banco.
+A generic sample CSV is an abstract exercise. A bank statement is a real problem: every bank exports in a different format, with no standardization — different columns, ordering, and noise. An app that assumes a fixed schema breaks the moment you switch banks.
 
-Dois formatos bem distintos foram usados como referência de arquitetura:
+Two very different formats were used as architectural reference:
 
 | | CommBank (AU) | Wise |
 |---|---|---|
-| Header | Nenhum | Completo, 23 colunas |
-| Colunas | 4 (data, valor, descrição, saldo) | 23, incluindo `Merchant` (nome limpo do comerciante) e `Transaction Details Type` |
-| Valor | String sinalizada (`"-1.00"`, `"+705.81"`) | Numérico |
-| Câmbio | Não se aplica | Linhas `CONVERSION` (BRL↔AUD) — não é gasto, é câmbio |
+| Header | None | Full header, 23 columns |
+| Columns | 4 (date, amount, description, balance) | 23, including `Merchant` (clean merchant name) and `Transaction Details Type` |
+| Amount | Signed string (`"-1.00"`, `"+705.81"`) | Numeric |
+| FX | N/A | `CONVERSION` rows (BRL↔AUD) — not spending, currency exchange |
 
-Nenhum extrato real desses bancos foi usado como dado público — os arquivos em [`data/sample/`](data/sample/) são **sintéticos**, com nomes e valores fictícios, desenhados pra reproduzir a mesma estrutura e os mesmos casos-limite dos originais (incluindo transações que não batem com nenhuma regra de categorização, de propósito).
+No real bank data was used as public data — the files in [`data/sample/`](data/sample/) are **synthetic**, with fictional names and values, designed to reproduce the same structure and edge cases as the originals (including transactions that intentionally don't match any categorization rule).
 
 ---
 
-## Arquitetura: adaptador de formato
+## Architecture: format adapter
 
-O parser nunca assume um schema fixo. Ele detecta o formato por heurística e despacha pro adaptador certo:
+The parser never assumes a fixed schema. It detects the format via heuristics and dispatches to the correct adapter:
 
 ```
 Upload CSV(s)
-  → lib/parsers/detect-format.ts   heurística: header contém "TransferWise ID"?
-                                    → wise. Sem header, 4 colunas, coluna 0 é
-                                    dd/mm/yyyy? → commbank. Header com date/
-                                    amount/description? → generic. Senão, erro.
+  → lib/parsers/detect-format.ts   heuristic: does the header contain "TransferWise ID"?
+                                    → wise. No header, 4 columns, column 0 is
+                                    dd/mm/yyyy? → commbank. Header with date/
+                                    amount/description? → generic. Otherwise, error.
   → lib/parsers/{commbank,wise,generic}.ts
-                                    → cada um normaliza pro mesmo schema:
+                                    → each normalizes to the same schema:
                                     { date, amount, currency, description,
                                     merchant?, direction, sourceBank,
                                     isExchange, raw }
-  → deduplicação                   transações repetidas entre arquivos do
-                                    mesmo upload (extratos com período
-                                    sobreposto) não são inseridas 2x
-  → lib/categorize/                categorização por regras (ver abaixo)
+  → deduplication                  repeated transactions across files in the
+                                    same upload (overlapping statement periods)
+                                    are not inserted twice
+  → lib/categorize/                rule-based categorization (see below)
   → Supabase (statements/transactions/reports)
-  → /report/[id]                   dashboard, recalcula tudo ao vivo a
-                                    partir de `transactions`
+  → /report/[id]                   dashboard, recalculates everything live
+                                    from `transactions`
 ```
 
-Adicionar um banco novo é implementar um parser novo (`lib/parsers/<banco>.ts`) que devolve o mesmo `NormalizedTransaction[]` — o resto do pipeline não muda.
+Adding a new bank means implementing a new parser (`lib/parsers/<bank>.ts`) that returns the same `NormalizedTransaction[]` — the rest of the pipeline stays unchanged.
 
 ---
 
-## Categorização: regras + IA local opcional
+## Categorization: rules + optional local AI
 
-Nenhuma chamada de IA em nuvem em nenhum momento — nem pra categorizar, nem pro resumo. Duas camadas, as duas rodando no seu próprio navegador ou no servidor sem depender de API externa:
+No cloud AI calls at any point — not for categorization, not for the summary. Two layers, both running in your own browser or on the server without any external API dependency:
 
-1. **Regras primeiro** ([`lib/categorize/rules.ts`](lib/categorize/rules.ts)) — dicionário de palavras-chave por categoria (`UBER`/`TRANSLINK` → Transporte, `COLES`/`WOOLWORTHS` → Mercado, `CONVERSION` → Câmbio, `RENT PAYMENT` → Aluguel, `PAYROLL` → Renda, `MEDICAL CENTRE` → Saúde, etc). Cobre a maioria dos casos reais, sem custo, instantâneo. No conjunto de exemplo (`npm run process-samples`): **51 de 56 transações (91%) caem numa regra**, sem precisar de nada além disso.
+1. **Rules first** ([`lib/categorize/rules.ts`](lib/categorize/rules.ts)) — a keyword-to-category dictionary (`UBER`/`TRANSLINK` → Transport, `COLES`/`WOOLWORTHS` → Groceries, `CONVERSION` → FX, `RENT PAYMENT` → Rent, `PAYROLL` → Income, `MEDICAL CENTRE` → Health, etc.). Covers the vast majority of real-world cases, zero cost, instant. On the sample dataset (`npm run process-samples`): **51 out of 56 transactions (91%) match a rule**, no AI needed.
 
-2. **Sugestão de IA local, opcional, pro que sobra** ([`lib/ai-local/`](lib/ai-local/)) — um botão no relatório ("Sugerir com IA local") que baixa um modelo de embeddings pequeno (`Xenova/multilingual-e5-small`, ~100MB, uma vez, cacheado no navegador) e roda inteiramente client-side via [`@huggingface/transformers`](https://github.com/huggingface/transformers.js), numa Web Worker (WebGPU com fallback pra WASM). Combina dois sinais: um classificador linear treinado offline sobre esses mesmos embeddings (`scripts/train-category-classifier.ts`, ~91% de acurácia de validação num dataset aberto de 68k transações bancárias) e a similaridade de cosseno contra frases de referência por categoria — só sugere quando os dois concordam, senão cai pro cosseno sozinho (mais confiável pra texto fora do inglês). Cada sugestão aparece como um chip que o usuário aceita ou descarta — nunca escreve no banco sozinha.
+2. **Optional local AI suggestions for the remainder** ([`lib/ai-local/`](lib/ai-local/)) — a button on the report ("Suggest with local AI") that downloads a small embeddings model (`Xenova/multilingual-e5-small`, ~100MB, once, cached in the browser) and runs entirely client-side via [`@huggingface/transformers`](https://github.com/huggingface/transformers.js), inside a Web Worker (WebGPU with WASM fallback). Combines two signals: a linear classifier trained offline on those same embeddings (`scripts/train-category-classifier.ts`, ~91% validation accuracy on an open dataset of 68k bank transactions) and cosine similarity against per-category reference phrases — it only suggests when both agree, otherwise falls back to cosine alone (more reliable for non-English text). Each suggestion appears as a chip the user can accept or dismiss — it never writes to the database on its own.
 
-3. **Categorização manual** — qualquer transação pode ser reclassificada direto na tabela do relatório, com busca e filtro por categoria.
+3. **Manual categorization** — any transaction can be reclassified directly in the report table, with search and filter by category.
 
-Transações de **câmbio** (`CONVERSION` no Wise) são marcadas com `isExchange: true` e excluídas do total de gasto — aparecem separadas porque não são consumo, são conversão de moeda.
-
----
-
-## Resumo executivo
-
-Gerado por template determinístico ([`lib/summary/build-summary.ts`](lib/summary/build-summary.ts)) a partir dos agregados já calculados (categoria com maior gasto, tendência período a período, maior transação, quantas ainda faltam categorizar) — sem chamada de rede, sem custo, sem variação entre execuções.
+**FX transactions** (`CONVERSION` in Wise) are flagged with `isExchange: true` and excluded from the spending total — they appear separately because they're currency conversion, not consumption.
 
 ---
 
-## Outras features
+## Executive Summary
 
-- **Conversão de moeda histórica** — seletor AUD/USD/EUR/BRL/GBP no relatório, recalcula usando a taxa de câmbio da *data de cada transação* (via [Frankfurter](https://frankfurter.dev), API gratuita sem chave).
-- **i18n** — inglês por padrão, com toggle pra português; categorias, resumo executivo e toda a interface traduzidos.
-- **Deduplicação no upload** — subir dois extratos com período sobreposto no mesmo upload não duplica as transações em comum (mas preserva repetições legítimas dentro de um único arquivo).
-- **Filtro e busca** na tabela de transações.
+Generated by a deterministic template ([`lib/summary/build-summary.ts`](lib/summary/build-summary.ts)) from the already-computed aggregates (top spending category, period-over-period trend, largest transaction, how many transactions still need categorizing) — no network call, no cost, no variance between runs.
+
+---
+
+## Other features
+
+- **Historical currency conversion** — AUD/USD/EUR/BRL/GBP selector on the report, recalculates using the exchange rate on *each transaction's date* (via [Frankfurter](https://frankfurter.dev), a free, key-less API).
+- **i18n** — English by default, with a toggle to Portuguese; categories, executive summary, and the full interface are translated.
+- **Upload deduplication** — uploading two statements with overlapping periods in the same upload won't duplicate shared transactions (but preserves legitimate duplicates within a single file).
+- **Filter and search** in the transactions table.
 
 ---
 
@@ -86,16 +86,18 @@ Gerado por template determinístico ([`lib/summary/build-summary.ts`](lib/summar
 
 - **Frontend:** Next.js 16 (App Router, Turbopack), React 19, Tailwind v4, shadcn/ui
 - **Backend:** Next.js Route Handlers
-- **Dados:** Supabase (Postgres) — `statements`, `transactions`, `reports`
-- **IA local:** `@huggingface/transformers` (transformers.js), 100% client-side — sem API de IA em nuvem
-- **Gráficos:** Recharts
+- **Data:** Supabase (Postgres) — `statements`, `transactions`, `reports`
+- **Local AI:** `@huggingface/transformers` (transformers.js), 100% client-side — no cloud AI API
+- **Charts:** Recharts
 - **Deploy:** Vercel
 
-## Setup local
+---
+
+## Local setup
 
 ```bash
 npm install
-cp .env.example .env.local   # preencher as 3 variáveis abaixo
+cp .env.example .env.local   # fill in the 3 variables below
 ```
 
 `.env.local`:
@@ -106,19 +108,21 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-Aplicar o schema (`supabase/migrations/*.sql`) no projeto Supabase — via `supabase db push` (com `supabase link` autenticado) ou colando o SQL direto no SQL Editor do painel.
+Apply the schema (`supabase/migrations/*.sql`) to your Supabase project — via `supabase db push` (with `supabase link` authenticated) or by pasting the SQL directly into the Supabase SQL Editor.
 
 ```bash
 npm run dev                # http://localhost:3000
-npm run process-samples    # roda o pipeline de categorização nos 2 CSVs de exemplo, sem UI
-npm run train-classifier   # retreina o classificador de IA local (offline, opcional)
+npm run process-samples    # runs the categorization pipeline on both sample CSVs, no UI
+npm run train-classifier   # retrains the local AI classifier (offline, optional)
 ```
 
-## Fora de escopo (próximos passos)
+---
 
-- Login/autenticação de usuário.
-- Suporte a mais de 2-3 formatos de banco — o objetivo aqui é provar o adaptador, não suportar todo banco do mundo.
-- Detecção de gastos recorrentes/assinaturas por análise de padrão.
-- Exportação de relatório em PDF.
-- Conexão bancária real (Open Banking, Plaid) — só upload de CSV.
-- Deduplicação entre uploads diferentes (hoje só compara arquivos do mesmo upload — ver comentário em [`app/api/statements/upload/route.ts`](app/api/statements/upload/route.ts)).
+## Out of scope (next steps)
+
+- User login / authentication.
+- Support for more than 2–3 bank formats — the goal here is to prove the adapter pattern, not cover every bank in the world.
+- Recurring expense / subscription detection via pattern analysis.
+- PDF report export.
+- Real bank connection (Open Banking, Plaid) — CSV upload only.
+- Cross-upload deduplication (today only compares files within the same upload — see comment in [`app/api/statements/upload/route.ts`](app/api/statements/upload/route.ts)).
