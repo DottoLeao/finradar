@@ -1,128 +1,103 @@
+<div align="center">
+
 # FinRadar
 
-**Upload any bank statement, see where your money went — without categorizing anything by hand.**
+**Upload any bank's statement CSV and see where your money went.**
 
-A dashboard that accepts one or more bank statements in CSV format (each bank exports differently), automatically categorizes transactions using rules, with an optional AI suggestion layer running 100% in the browser for whatever's left, and generates a deterministic executive summary straight from the actual numbers in the period — no cloud AI calls, no per-request cost.
+[![Live demo](https://img.shields.io/badge/Live_demo-finradar--zeta.vercel.app-2dbd82?style=flat-square&labelColor=0c0d0b)](https://finradar-zeta.vercel.app)
 
-> 🔗 Live: [finradar-zeta.vercel.app](https://finradar-zeta.vercel.app)
+![Next.js](https://img.shields.io/badge/Next.js_16-000000?style=flat-square&logo=next.js&logoColor=white)
+![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
+![shadcn/ui](https://img.shields.io/badge/shadcn%2Fui-000000?style=flat-square&logo=shadcnui&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
+![Transformers.js](https://img.shields.io/badge/Transformers.js-FFD21E?style=flat-square&logo=huggingface&logoColor=black)
+![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
----
+</div>
 
-## The real problem
+## About
 
-A generic sample CSV is an abstract exercise. A bank statement is a real problem: every bank exports in a different format, with no standardization — different columns, ordering, and noise. An app that assumes a fixed schema breaks the moment you switch banks.
+Every bank exports statements in its own CSV format, with different columns, ordering and noise, so an app that assumes one fixed schema breaks as soon as you switch banks. FinRadar detects the format, normalises each file through a per-bank adapter, categorises transactions with rules first, and builds a dashboard and a plain-language summary straight from the numbers. Nothing is sent to an external model API: the optional classifier for leftover transactions runs entirely in the browser.
 
-Two very different formats were used as architectural reference:
+## Features
 
-| | CommBank (AU) | Wise |
-|---|---|---|
-| Header | None | Full header, 23 columns |
-| Columns | 4 (date, amount, description, balance) | 23, including `Merchant` (clean merchant name) and `Transaction Details Type` |
-| Amount | Signed string (`"-1.00"`, `"+705.81"`) | Numeric |
-| FX | N/A | `CONVERSION` rows (BRL↔AUD) — not spending, currency exchange |
+- **Format detection and adapters** for CommBank, Wise and a generic CSV with a date/amount/description header; adding a bank means adding one parser that returns the same normalised shape
+- **Rules-first categorisation** with a keyword dictionary; on the bundled samples, 52 of 56 transactions match a rule (`npm run process-samples`)
+- **Optional in-browser classifier** for what the rules miss: a multilingual embeddings model (`Xenova/multilingual-e5-small`) running in a Web Worker on WASM, combined with a linear classifier trained offline; suggestions are chips the user accepts or dismisses
+- **Manual recategorisation** of any transaction, with search and category filter
+- **Deterministic summary** built from the computed aggregates: top category, period trend, largest transaction and what still needs a category
+- **FX handling**: Wise `CONVERSION` rows are flagged and kept out of the spending total
+- **Historical currency conversion** (AUD, USD, EUR, BRL, GBP) at each transaction's date, via the key-less Frankfurter API
+- **Deduplication** of overlapping statements uploaded together
+- **Print-ready report**: "Export PDF" uses the browser's print dialog with a print stylesheet
+- English and Portuguese interface
 
-No real bank data was used as public data — the files in [`data/sample/`](data/sample/) are **synthetic**, with fictional names and values, designed to reproduce the same structure and edge cases as the originals (including transactions that intentionally don't match any categorization rule).
+## Tech stack
 
----
+| Area | Choice |
+|---|---|
+| App | Next.js 16 (App Router, Turbopack), React 19, TypeScript |
+| UI | Tailwind CSS 4, shadcn/ui, Recharts |
+| Backend | Next.js Route Handlers, Papa Parse |
+| Data | Supabase (Postgres): `statements`, `transactions`, `reports` |
+| In-browser classifier | `@huggingface/transformers` (Transformers.js) in a Web Worker |
+| Deploy | Vercel |
 
-## Architecture: format adapter
-
-The parser never assumes a fixed schema. It detects the format via heuristics and dispatches to the correct adapter:
-
-```
-Upload CSV(s)
-  → lib/parsers/detect-format.ts   heuristic: does the header contain "TransferWise ID"?
-                                    → wise. No header, 4 columns, column 0 is
-                                    dd/mm/yyyy? → commbank. Header with date/
-                                    amount/description? → generic. Otherwise, error.
-  → lib/parsers/{commbank,wise,generic}.ts
-                                    → each normalizes to the same schema:
-                                    { date, amount, currency, description,
-                                    merchant?, direction, sourceBank,
-                                    isExchange, raw }
-  → deduplication                  repeated transactions across files in the
-                                    same upload (overlapping statement periods)
-                                    are not inserted twice
-  → lib/categorize/                rule-based categorization (see below)
-  → Supabase (statements/transactions/reports)
-  → /report/[id]                   dashboard, recalculates everything live
-                                    from `transactions`
-```
-
-Adding a new bank means implementing a new parser (`lib/parsers/<bank>.ts`) that returns the same `NormalizedTransaction[]` — the rest of the pipeline stays unchanged.
-
----
-
-## Categorization: rules + optional local AI
-
-No cloud AI calls at any point — not for categorization, not for the summary. Two layers, both running in your own browser or on the server without any external API dependency:
-
-1. **Rules first** ([`lib/categorize/rules.ts`](lib/categorize/rules.ts)) — a keyword-to-category dictionary (`UBER`/`TRANSLINK` → Transport, `COLES`/`WOOLWORTHS` → Groceries, `CONVERSION` → FX, `RENT PAYMENT` → Rent, `PAYROLL` → Income, `MEDICAL CENTRE` → Health, etc.). Covers the vast majority of real-world cases, zero cost, instant. On the sample dataset (`npm run process-samples`): **51 out of 56 transactions (91%) match a rule**, no AI needed.
-
-2. **Optional local AI suggestions for the remainder** ([`lib/ai-local/`](lib/ai-local/)) — a button on the report ("Suggest with local AI") that downloads a small embeddings model (`Xenova/multilingual-e5-small`, ~100MB, once, cached in the browser) and runs entirely client-side via [`@huggingface/transformers`](https://github.com/huggingface/transformers.js), inside a Web Worker (WebGPU with WASM fallback). Combines two signals: a linear classifier trained offline on those same embeddings (`scripts/train-category-classifier.ts`, ~91% validation accuracy on an open dataset of 68k bank transactions) and cosine similarity against per-category reference phrases — it only suggests when both agree, otherwise falls back to cosine alone (more reliable for non-English text). Each suggestion appears as a chip the user can accept or dismiss — it never writes to the database on its own.
-
-3. **Manual categorization** — any transaction can be reclassified directly in the report table, with search and filter by category.
-
-**FX transactions** (`CONVERSION` in Wise) are flagged with `isExchange: true` and excluded from the spending total — they appear separately because they're currency conversion, not consumption.
-
----
-
-## Executive Summary
-
-Generated by a deterministic template ([`lib/summary/build-summary.ts`](lib/summary/build-summary.ts)) from the already-computed aggregates (top spending category, period-over-period trend, largest transaction, how many transactions still need categorizing) — no network call, no cost, no variance between runs.
-
----
-
-## Other features
-
-- **Historical currency conversion** — AUD/USD/EUR/BRL/GBP selector on the report, recalculates using the exchange rate on *each transaction's date* (via [Frankfurter](https://frankfurter.dev), a free, key-less API).
-- **i18n** — English by default, with a toggle to Portuguese; categories, executive summary, and the full interface are translated.
-- **Upload deduplication** — uploading two statements with overlapping periods in the same upload won't duplicate shared transactions (but preserves legitimate duplicates within a single file).
-- **Filter and search** in the transactions table.
-
----
-
-## Stack
-
-- **Frontend:** Next.js 16 (App Router, Turbopack), React 19, Tailwind v4, shadcn/ui
-- **Backend:** Next.js Route Handlers
-- **Data:** Supabase (Postgres) — `statements`, `transactions`, `reports`
-- **Local AI:** `@huggingface/transformers` (transformers.js), 100% client-side — no cloud AI API
-- **Charts:** Recharts
-- **Deploy:** Vercel
-
----
-
-## Local setup
+## Getting started
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in the 3 variables below
+cp .env.example .env.local   # fill in the variables below
+npm run dev                  # http://localhost:3000
 ```
 
-`.env.local`:
+Environment variables:
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-```
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
 
-Apply the schema (`supabase/migrations/*.sql`) to your Supabase project — via `supabase db push` (with `supabase link` authenticated) or by pasting the SQL directly into the Supabase SQL Editor.
+Apply the schema in `supabase/migrations/` to your Supabase project, with `supabase db push` or by pasting the SQL into the SQL Editor.
+
+Other scripts:
 
 ```bash
-npm run dev                # http://localhost:3000
-npm run process-samples    # runs the categorization pipeline on both sample CSVs, no UI
-npm run train-classifier   # retrains the local AI classifier (offline, optional)
+npm run process-samples    # run the parsing and categorisation pipeline on the sample CSVs, no UI
+npm run train-classifier   # retrain the in-browser classifier weights (offline, optional)
+npm run lint
 ```
 
----
+The CSVs in [`data/sample/`](data/sample/) are synthetic, with fictional names and values that reproduce the structure and edge cases of real exports.
 
-## Out of scope (next steps)
+## Project structure
 
-- User login / authentication.
-- Support for more than 2–3 bank formats — the goal here is to prove the adapter pattern, not cover every bank in the world.
-- Recurring expense / subscription detection via pattern analysis.
-- PDF report export.
-- Real bank connection (Open Banking, Plaid) — CSV upload only.
-- Cross-upload deduplication (today only compares files within the same upload — see comment in [`app/api/statements/upload/route.ts`](app/api/statements/upload/route.ts)).
+```
+app/                pages and route handlers (upload, transactions, locale)
+app/report/[id]/    report dashboard, recalculated live from `transactions`
+components/shared/  charts, tables, upload form, summary, currency and language switchers
+lib/parsers/        format detection and per-bank adapters
+lib/categorize/     keyword rules
+lib/ai-local/       in-browser classifier (Web Worker, weights, reference phrases)
+lib/summary/        deterministic summary template
+lib/currency/       Frankfurter rates and conversion
+supabase/           config and SQL migrations
+scripts/            sample pipeline and classifier training
+```
+
+## Roadmap
+
+Listed as out of scope for now:
+
+- User accounts and authentication
+- Recurring expense and subscription detection
+- Deduplication across separate uploads (today only files in the same upload are compared)
+
+## Author
+
+**Lorenzo Leão Dotto**, full-stack developer.
+
+[![Portfolio](https://img.shields.io/badge/Portfolio-lorenzodotto.com.br-2dbd82?style=flat-square&labelColor=0c0d0b)](https://lorenzodotto.com.br)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-lorenzodotto-2dbd82?style=flat-square&logo=linkedin&logoColor=white&labelColor=0c0d0b)](https://www.linkedin.com/in/lorenzodotto)
+[![GitHub](https://img.shields.io/badge/GitHub-DottoLeao-2dbd82?style=flat-square&logo=github&logoColor=white&labelColor=0c0d0b)](https://github.com/DottoLeao)
